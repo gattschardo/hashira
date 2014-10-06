@@ -1,6 +1,6 @@
 signature HASHIRA =
 sig
-  datatype command = None | Left | Right | Drop
+  datatype command = None | Left | Right | Drop | Quit
   datatype color = Red | Black | Background
   datatype mode = Falling of int * (int * color) list | Landed of int
 
@@ -19,7 +19,7 @@ end
 
 structure Hashira : HASHIRA =
 struct
-  datatype command = None | Left | Right | Drop
+  datatype command = None | Left | Right | Drop | Quit
   datatype color = Red | Black | Background
   datatype mode = Falling of int * (int * color) list | Landed of int
 
@@ -53,28 +53,28 @@ struct
       Vector.update (f, i, cl')
     end
 
-  fun apply_ev Right _ cl l = (print "right\n";(cl + 1, l))
+  fun apply_ev Right _ cl l = (cl + 1, l)
     | apply_ev Left  _ cl l = (cl - 1, l)
     | apply_ev Drop _ cl l = (cl,l)
     | apply_ev None _ cl l = (cl,l)
 
   fun tick (Landed col) _ (fld:field) =
     (Falling (col, new_blocks Red), fld)
-    | tick (Falling (cl, l)) ev (fld:field) =
+    | tick (Falling (cl0, l0)) ev (fld:field) =
       let
-        val (cl', l') = apply_ev ev fld cl l
+        val (cl1, l1) = apply_ev ev fld cl0 l0
         fun drop (y,r) = (y + 1, r)
-        val l'' = map drop l'
+        val l2 = map drop l1
         fun max ((x,_),m) = if m > x then m else x
-        val bot = foldl max 0 l''
-        val target = Vector.sub (fld, cl')
+        val bot = foldl max 0 l2
+        val target = Vector.sub (fld, cl1)
         fun hit ((x,_),old) = old orelse (x - 1 = bot)
         val down = foldl hit false target
       in
         if down then
-          (Landed cl', add_blocks l'' cl' fld)
+          (Landed cl1, add_blocks l2 cl1 fld)
         else
-          (Falling (cl', l''), fld)
+          (Falling (cl1, l2), fld)
       end
 
   fun sdl_col Red = {r=100, g=0, b=0, a=255}
@@ -105,23 +105,35 @@ struct
         Sdl.Key_Left => Left |
         Sdl.Key_Right => Right |
         Sdl.Key_D => Drop |
+        Sdl.Key_Q => Quit |
         _ => None)
     | handle_event _ = None
+
+  fun next_event () =
+    case Sdl.poll_event () of
+      NONE => NONE |
+      SOME ev => (case (#t ev) of
+        Sdl.Key_Down _ => SOME ev |
+        _ => next_event ())
+
   fun main () =
     let
       val (r, f) = init ()
       fun run md f =
         let
-          val ev = Sdl.poll_event ()
+          val ev = next_event ()
           val cmd =
             case ev of
               NONE => None |
               SOME ev => handle_event (#t ev)
-          val (md', f') = tick md Drop f
+          val (md', f') = tick md cmd f
         in
           render f' md' r;
           Sdl.delay 400;
-          run md' f'
+          if cmd <> Quit then
+            run md' f'
+          else
+            ()
         end
     in
       run (Landed 1) f
