@@ -194,7 +194,7 @@ struct
     | parse_event 0x200 _ = Window
     | parse_event 0x201 _ = Sys_WM
     (* keyboard events *)
-    | parse_event 0x300 k = Key_Down (key_of_keycode k)
+    | parse_event 0x300 k = (print "keydown\n"; Key_Down (key_of_keycode k))
     | parse_event 0x301 k = Key_Up (key_of_keycode k)
     | parse_event 0x302 k = Text_Editing
     | parse_event 0x303 k = Text_Input
@@ -319,7 +319,7 @@ struct
         val keycode = C.fromCint (C.offset 5 C.Cint (C.deref e))
         val modifiers = C.fromCshort (C.offset 6 C.Cint (C.deref e))
         val t = parse_event typ keycode
-        (* val () = print ("event: " ^ (case t of
+        val () = print ("event: " ^ (case t of
           Quit => "quit" |
           App _ => "app" |
           Window => "window" | Sys_WM => "sys wm" |
@@ -334,7 +334,7 @@ struct
           Render_Targets_Reset => "render reset" |
           Key_Down _ => "keydown " ^ (Int.toString keycode) |
           Key_Up _ => "keyup " ^ (Int.toString keycode) |
-          User_Event => "user") ^ "\n") *)
+          User_Event => "user") ^ "\n")
       in
         { t = t,
           data = e }
