@@ -1,18 +1,24 @@
 signature HASHIRA =
 sig
-  datatype command = None | Left | Right | Drop | Quit
+  datatype command = None | Left | Right | Rotate | Drop | Quit
   datatype color = Red | Green | Blue | Yellow | Purple | Brown | Black | Background
-  datatype mode = Falling of int * (int * color) list | Landed of int
 
   type field = (int * color) list vector
   type state = Lcg.lcg
+  type cluster = (int * color) list
+
+  datatype mode = Falling of int * cluster | Landed of int
 
   val height : int
   val width : int
 
   val rnd_col : Lcg.lcg -> Lcg.lcg * color
+  val new_blocks : color * color * color -> cluster
+  val drop : field -> (int * cluster) -> cluster
+  val rot : cluster -> cluster
 
   val init : unit -> (Sdl.renderer * field * state)
+  val apply_ev : command -> field -> int * cluster -> int * cluster
   val tick : mode -> command -> field -> state -> (mode * field * state)
 
   val render : field -> mode -> Sdl.renderer -> unit
@@ -22,12 +28,13 @@ end
 
 structure Hashira : HASHIRA =
 struct
-  datatype command = None | Left | Right | Drop | Quit
+  datatype command = None | Left | Right | Rotate | Drop | Quit
   datatype color = Red | Green | Blue | Yellow | Purple | Brown | Black | Background
   datatype mode = Falling of int * (int * color) list | Landed of int
 
   type field = (int * color) list vector
   type state = Lcg.lcg
+  type cluster = (int * color) list
 
   val height = 12
   val width = 10
@@ -60,10 +67,37 @@ struct
       Vector.update (f, i, cl')
     end
 
-  fun apply_ev Right _ cl l = (cl + 1, l)
-    | apply_ev Left  _ cl l = (cl - 1, l)
-    | apply_ev Drop _ cl l = (cl,l)
-    | apply_ev None _ cl l = (cl,l)
+  fun top_block col =
+    let
+      fun top ((x, _), t) = if x < t then x else t
+    in
+      foldl top height col
+    end
+
+  fun dropk k (y, r) = (y + k, r)
+
+  fun drop fld (cl, clust) =
+    let
+      val (cline, _) = List.nth (clust, 2)
+      val top = top_block (Vector.sub (fld, cl))
+    in
+      map (dropk (top - cline - 2)) clust
+    end
+
+  fun rot clust =
+    let
+      val (l0, c0) = List.nth (clust, 0)
+      val (l1, c1) = List.nth (clust, 1)
+      val (l2, c2) = List.nth (clust, 2)
+    in
+      [(l0, c1), (l1, c2), (l2, c0)]
+    end
+
+  fun apply_ev Right _ (cl, c) = (cl + 1, c)
+    | apply_ev Left  _ (cl, c) = (cl - 1, c)
+    | apply_ev Drop fld (cl, c) = (cl, drop fld (cl, c))
+    | apply_ev Rotate _ (cl, c) = (cl, rot c)
+    | apply_ev None _ (cl, c) = (cl, c)
 
   fun tick (Landed col) _ (fld:field) st0 =
       let
@@ -74,31 +108,30 @@ struct
       in
         (Falling (col, blocks), fld, st3)
       end
-    | tick (Falling (cl0, l0)) ev (fld:field) st =
+    | tick (Falling (cl0, c0)) ev (fld:field) st =
       let
-        val (cl1, l1) = apply_ev ev fld cl0 l0
-        fun drop (y,r) = (y + 1, r)
-        val l2 = map drop l1
+        val (cl1, c1) = apply_ev ev fld (cl0, c0)
+        val c2 = map (dropk 1) c1
         fun max ((x,_),m) = if m > x then m else x
-        val bot = foldl max 0 l2
+        val bot = foldl max 0 c2
         val target = Vector.sub (fld, cl1)
         fun hit ((x,_),old) = old orelse (x - 1 = bot)
         val down = foldl hit false target
       in
         if down then
-          (Landed cl1, add_blocks l2 cl1 fld, st)
+          (Landed cl1, add_blocks c2 cl1 fld, st)
         else
-          (Falling (cl1, l2), fld, st)
+          (Falling (cl1, c2), fld, st)
       end
 
-  fun sdl_col Red = {r=100, g=0, b=0, a=255}
-    | sdl_col Green = {r=0, g=100, b=0, a=255}
-    | sdl_col Blue = {r=0, g=0, b=100, a=255}
-    | sdl_col Yellow = {r=0, g=100, b=100, a=255}
-    | sdl_col Purple = {r=100, g=0, b=100, a=255}
-    | sdl_col Brown = {r=100, g=100, b=0, a=255}
-    | sdl_col Black = {r=100, g=100, b=100, a=255}
-    | sdl_col Background = {r=50, g=50, b=50, a=255}
+  fun sdl_col Red        = {r=100, g=  0, b=  0, a=255}
+    | sdl_col Green      = {r=  0, g=100, b=  0, a=255}
+    | sdl_col Blue       = {r=  0, g=  0, b=100, a=255}
+    | sdl_col Yellow     = {r=  0, g=100, b=100, a=255}
+    | sdl_col Purple     = {r=100, g=  0, b=100, a=255}
+    | sdl_col Brown      = {r=100, g=100, b=  0, a=255}
+    | sdl_col Black      = {r=100, g=100, b=100, a=255}
+    | sdl_col Background = {r= 50, g= 50, b= 50, a=255}
 
   fun render_column x rend c =
     List.app (fn (y,col) =>
@@ -121,11 +154,12 @@ struct
 
   fun handle_event (Sdl.Key_Down k) =
       (case k of
-        Sdl.Key_Left => Left |
-        Sdl.Key_Right => Right |
-        Sdl.Key_D => Drop |
-        Sdl.Key_Q => Quit |
-        _ => None)
+        Sdl.K_Left  => Left |
+        Sdl.K_Right => Right |
+        Sdl.K_Up    => Rotate |
+        Sdl.K_Down  => Drop |
+        Sdl.K_Q     => Quit |
+        _           => None)
     | handle_event _ = None
 
   fun next_event () =

@@ -9,7 +9,7 @@ sig
   type font = CInterface.vol
 
   (*** constants ***)
-  datatype key = Key_Unkown | Key_Left | Key_Right | Key_Space | Key_Q | Key_B | Key_U | Key_P | Key_R | Key_D
+  datatype key = K_Unkown | K_Left | K_Right | K_Up | K_Down | K_Space | K_Q | K_B | K_U | K_P | K_R | K_D
 
   datatype renderer_flip = Flip_None | Flip_Horizontal | Flip_Vertical
 
@@ -102,7 +102,7 @@ struct
   val gets_img = C.get_sym "/usr/lib/libSDL2_image.so"
   val gets_ttf = C.get_sym "/usr/lib/libSDL2_ttf.so"
 
-  datatype key = Key_Unkown | Key_Left | Key_Right | Key_Space | Key_Q | Key_B | Key_U | Key_P | Key_R | Key_D
+  datatype key = K_Unkown | K_Left | K_Right | K_Up | K_Down | K_Space | K_Q | K_B | K_U | K_P | K_R | K_D
 
   datatype renderer_flip = Flip_None | Flip_Horizontal | Flip_Vertical
   fun int_of_flip Flip_None = 0
@@ -168,18 +168,20 @@ struct
 
   val scancode_offset = 0x40000000 (* 1<<30 *)
 
-  fun key_of_keycode 0x20 = Key_Space
-    | key_of_keycode 0x62 = Key_B
-    | key_of_keycode 0x64 = Key_D
-    | key_of_keycode 0x70 = Key_P
-    | key_of_keycode 0x71 = Key_Q
-    | key_of_keycode 0x72 = Key_R
-    | key_of_keycode 0x75 = Key_U
+  fun key_of_keycode 0x20 = K_Space
+    | key_of_keycode 0x62 = K_B
+    | key_of_keycode 0x64 = K_D
+    | key_of_keycode 0x70 = K_P
+    | key_of_keycode 0x71 = K_Q
+    | key_of_keycode 0x72 = K_R
+    | key_of_keycode 0x75 = K_U
     | key_of_keycode i =
       case i - scancode_offset of
-        79 => Key_Right |
-        80 => Key_Left |
-        _ => Key_Unkown
+        79 => K_Right |
+        80 => K_Left |
+        81 => K_Down |
+        82 => K_Up |
+        _ => K_Unkown
 
   exception Unknown_Event of int
   fun parse_event 0x100 _ = Quit
