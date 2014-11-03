@@ -1,6 +1,6 @@
 signature HASHIRA =
 sig
-  datatype command = None | Left | Right | Rotate | Drop | Quit
+  datatype command = Left | Right | Rotate | Drop | Quit
   datatype color = Red | Green | Blue | Yellow | Purple | Brown | Black | Background
 
   type field = (int * color) list vector
@@ -18,8 +18,9 @@ sig
   val rot : cluster -> cluster
 
   val init : unit -> (Sdl.renderer * field * state)
+  val handle_event : Sdl.event_type -> command option
   val apply_ev : command -> field -> int * cluster -> int * cluster
-  val tick : mode -> command -> field -> state -> (mode * field * state)
+  val tick : mode -> command option -> field -> state -> (mode * field * state)
 
   val render : field -> mode -> Sdl.renderer -> unit
 
@@ -28,7 +29,7 @@ end
 
 structure Hashira : HASHIRA =
 struct
-  datatype command = None | Left | Right | Rotate | Drop | Quit
+  datatype command = Left | Right | Rotate | Drop | Quit
   datatype color = Red | Green | Blue | Yellow | Purple | Brown | Black | Background
   datatype mode = Falling of int * (int * color) list | Landed of int
 
@@ -93,13 +94,18 @@ struct
       [(l0, c1), (l1, c2), (l2, c0)]
     end
 
-  fun apply_ev Right _ (cl, c) = (cl + 1, c)
-    | apply_ev Left  _ (cl, c) = (cl - 1, c)
-    | apply_ev Drop fld (cl, c) = (cl, drop fld (cl, c))
-    | apply_ev Rotate _ (cl, c) = (cl, rot c)
-    | apply_ev None _ (cl, c) = (cl, c)
+  fun hit _ (col, clust) =
+    col < 1 orelse col > width
 
-  fun tick (Landed col) _ (fld:field) st0 =
+  fun apply_ev cmd fld (cl, c) =
+    case cmd
+    of Right  => (if hit fld (cl + 1, c) then cl else cl + 1, c)
+     | Left   => (if hit fld (cl - 1, c) then cl else cl - 1, c)
+     | Drop   => (cl, drop fld (cl, c))
+     | Rotate => (cl, rot c)
+     | Quit   => (cl, c)
+
+  fun tick (Landed col) _ fld st0 =
       let
         val (st1, c0) = rnd_col st0
         val (st2, c1) = rnd_col st1
@@ -108,9 +114,9 @@ struct
       in
         (Falling (col, blocks), fld, st3)
       end
-    | tick (Falling (cl0, c0)) ev (fld:field) st =
+    | tick (Falling (cl0, c0)) ev fld st =
       let
-        val (cl1, c1) = apply_ev ev fld (cl0, c0)
+        val (cl1, c1) = case ev of SOME e => apply_ev e fld (cl0, c0) | NONE => (cl0, c0)
         val c2 = map (dropk 1) c1
         fun max ((x,_),m) = if m > x then m else x
         val bot = foldl max 0 c2
@@ -124,12 +130,12 @@ struct
           (Falling (cl1, c2), fld, st)
       end
 
-  fun sdl_col Red        = {r=100, g=  0, b=  0, a=255}
-    | sdl_col Green      = {r=  0, g=100, b=  0, a=255}
-    | sdl_col Blue       = {r=  0, g=  0, b=100, a=255}
-    | sdl_col Yellow     = {r=  0, g=100, b=100, a=255}
-    | sdl_col Purple     = {r=100, g=  0, b=100, a=255}
-    | sdl_col Brown      = {r=100, g=100, b=  0, a=255}
+  fun sdl_col Red        = {r=255, g=  0, b=  0, a=255}
+    | sdl_col Green      = {r=  0, g=255, b=  0, a=255}
+    | sdl_col Blue       = {r=  0, g=  0, b=255, a=255}
+    | sdl_col Yellow     = {r=255, g=255, b=  0, a=255}
+    | sdl_col Purple     = {r=160, g= 32, b=240, a=255} (* X11 Purple *)
+    | sdl_col Brown      = {r=139, g= 69, b= 19, a=255} (* X11 Saddle Brown *)
     | sdl_col Black      = {r=100, g=100, b=100, a=255}
     | sdl_col Background = {r= 50, g= 50, b= 50, a=255}
 
@@ -154,13 +160,13 @@ struct
 
   fun handle_event (Sdl.Key_Down k) =
       (case k of
-        Sdl.K_Left  => Left |
-        Sdl.K_Right => Right |
-        Sdl.K_Up    => Rotate |
-        Sdl.K_Down  => Drop |
-        Sdl.K_Q     => Quit |
-        _           => None)
-    | handle_event _ = None
+        Sdl.K_Left  => SOME Left |
+        Sdl.K_Right => SOME Right |
+        Sdl.K_Up    => SOME Rotate |
+        Sdl.K_Down  => SOME Drop |
+        Sdl.K_Q     => SOME Quit |
+        _           => NONE)
+    | handle_event _ = NONE
 
   fun next_event () =
     case Sdl.poll_event () of
@@ -177,13 +183,13 @@ struct
           val ev = next_event ()
           val cmd =
             case ev of
-              NONE => None |
+              NONE => NONE |
               SOME ev => handle_event (#t ev)
           val (md', f', st') = tick md cmd f st
         in
           render f' md' r;
           Sdl.delay 400;
-          if cmd <> Quit then
+          if cmd <> SOME Quit then
             run md' f' st'
           else
             ()

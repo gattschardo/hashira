@@ -215,11 +215,11 @@ struct
     | parse_event 0x606 _ = Joystick J_Device_Removed
     (* controller events *)
     | parse_event 0x650 _ = Controller C_Axis_Motion
-    | parse_event 0x650 _ = Controller C_Button_Down
-    | parse_event 0x650 _ = Controller C_Button_Up
-    | parse_event 0x650 _ = Controller C_Device_Added
-    | parse_event 0x650 _ = Controller C_Device_Removed
-    | parse_event 0x650 _ = Controller C_Device_Remapped
+    | parse_event 0x651 _ = Controller C_Button_Down
+    | parse_event 0x652 _ = Controller C_Button_Up
+    | parse_event 0x653 _ = Controller C_Device_Added
+    | parse_event 0x654 _ = Controller C_Device_Removed
+    | parse_event 0x655 _ = Controller C_Device_Remapped
     (* touch events *)
     | parse_event 0x700 _ = Finger F_Down
     | parse_event 0x701 _ = Finger F_Up

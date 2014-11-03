@@ -59,7 +59,7 @@ struct
     end
 
   fun next_vector v st =
-    let val (st', i) = next_range (0, (Vector.length v) - 1) st
+    let val (st', i) = next_range (0, Vector.length v) st
     in
       (st', Vector.sub (v, i))
     end
