@@ -5,6 +5,6 @@ all: hashira
 clean:
 	$(RM) hashira hashira.o
 
-hashira: hashira.ML
-	$(ML) compile.ML
+hashira: hashira.sml
+	$(ML) compile.sml
 	$(CC) -o $@ hashira.o -lpolymain -lpolyml
