@@ -11,21 +11,21 @@ c = 1 013 904 223
 
 signature LCG =
 sig
-  datatype lcg = St of int * int * int * int
+  type t
 
-  val make : int -> int -> int -> lcg
-  val nr : lcg
+  val make : int -> int -> int -> t
+  val nr : t
 
-  val seed : int -> lcg -> lcg
+  val seed : int -> t -> t
 
-  val next : lcg -> lcg * int
-  val next_range : int * int -> lcg -> lcg * int
-  val next_vector : 'a vector -> lcg -> lcg * 'a
+  val next : t -> t * int
+  val next_range : int * int -> t -> t * int
+  val next_vector : 'a vector -> t -> t * 'a
 end
 
 structure Lcg : LCG =
 struct
-  datatype lcg = St of int * int * int * int
+  datatype t = St of int * int * int * int
 
   fun make a c m = St (a, c, m, 0)
 
@@ -43,12 +43,11 @@ struct
   fun next_range (i, j) (St (a, c, m, x)) =
     let
       val n = j - i
-      val top =  ((((m - n) + 1) div n) * n - 1) + n
+      val top = ((((m - n) + 1) div n) * n - 1) + n
       fun iter st =
         let val (st', y) = next st
         in
-          if y <= top
-          then
+          if y <= top then
             (st', y)
           else
             iter st'
