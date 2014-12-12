@@ -33,12 +33,13 @@ sig
 
   val try : ('a -> bool) -> ('a -> 'a) -> 'a -> 'a
 
-  val is_some : 'a option -> bool
-  val the : 'a option -> 'a
-
+  val maybe_do : ('a -> 'b) -> 'a option -> 'b -> 'b
   val maybe_apply : ('b -> 'a -> 'a) -> 'b option -> 'a -> 'a
 
   val println : string -> unit
+
+  val split_half : 'a list -> 'a list * 'a list
+  val sort : ('a * 'a -> bool) -> 'a list -> 'a list
 end
 
 structure Basic : BASIC =
@@ -76,16 +77,39 @@ struct
       if is_ok a' then a' else a
     end
 
-  fun is_some NONE = false
-    | is_some (SOME _) = true
-
-  fun the (SOME x) = x
+  fun maybe_do _ NONE b = b
+    | maybe_do f (SOME a) _ = f a
 
   fun maybe_apply _ NONE b = b
     | maybe_apply f (SOME a) b = f a b
 
   fun println x = print (x ^ "\n")
+
+  fun split_half l =
+    let val x = length l div 2
+    in
+      (List.take (l, x), List.drop (l, x))
+    end
+
+  fun merge _ [] r = r
+    | merge _ l [] = l
+    | merge lt (x::l) (y::r) =
+      if lt (x, y) then
+        x::merge lt l (y::r)
+      else
+        y::merge lt (x::l) r
+  and sort _ [] = []
+    | sort _ [x] = [x]
+    | sort lt l =
+      let
+        val (left, right) = split_half l
+        val left' = sort lt left
+        val right' = sort lt right
+      in
+        merge lt left' right'
+      end
 end
 
 open Basic
+
 (* vim: se ai et ts=2 sw=2: *)
