@@ -33,7 +33,12 @@ sig
 
   val try : ('a -> bool) -> ('a -> 'a) -> 'a -> 'a
 
+  val is_some : 'a option -> bool
+  val the : 'a option -> 'a
+
   val maybe_apply : ('b -> 'a -> 'a) -> 'b option -> 'a -> 'a
+
+  val println : string -> unit
 end
 
 structure Basic : BASIC =
@@ -71,8 +76,15 @@ struct
       if is_ok a' then a' else a
     end
 
+  fun is_some NONE = false
+    | is_some (SOME _) = true
+
+  fun the (SOME x) = x
+
   fun maybe_apply _ NONE b = b
     | maybe_apply f (SOME a) b = f a b
+
+  fun println x = print (x ^ "\n")
 end
 
 open Basic

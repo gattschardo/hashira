@@ -8,11 +8,12 @@ sig
   type field
   type state
   type cluster
-
-  datatype mode = Falling of cluster | Landed of position
+  type mode
 
   val height : coord
   val width : coord
+
+  val show_command : command -> string
   
   val rnd_col : Lcg.t -> Lcg.t * color
   val new_blocks : coord -> color * color * color -> cluster
@@ -22,7 +23,7 @@ sig
   val init : unit -> (Sdl.renderer * state)
   val handle_event : Sdl.event_type -> command option
   val apply_ev : field -> command -> cluster -> cluster
-  val tick : mode -> command option -> field -> state -> (mode * field * state)
+  val tick : mode -> command option -> field -> state -> bool -> (mode * field * state)
 
   val render : Sdl.renderer -> field -> mode -> unit
 
@@ -45,6 +46,12 @@ struct
   val height = 12
   val width = 10
   val size = 40
+
+  fun show_command Left = "Left"
+    | show_command Right = "Right"
+    | show_command Rotate = "Rotate"
+    | show_command Drop = "Drop"
+    | show_command Quit = "Quit"
 
   val rnd_col = Lcg.next_vector (Vector.fromList [Red, Green, Blue, Yellow, Purple, Brown])
 
@@ -110,21 +117,21 @@ struct
       ((c0, c1, c2), st3)
     end
 
-  fun tick (Landed (x, _)) _ fld st =
+  fun tick (Landed (x, _)) _ fld st _ =
       let
         val (colors, st') = new_colors st
       in
         (Falling (new_blocks x colors), fld, st')
       end
-    | tick (Falling c0) ev fld st =
+    | tick (Falling c0) ev fld st do_drop =
       let
-        val (c1 as (p1, _)) = maybe_apply (apply_ev fld) ev c0
+        val c1 as (p1, _) = maybe_apply (apply_ev fld) ev c0
         val c2 = move_y inc c1
       in
         if hit fld c2 then
           (Landed p1, add_blocks c1 fld, st)
         else
-          (Falling c2, fld, st)
+          (Falling (if do_drop then c2 else c1), fld, st)
       end
 
   fun sdl_col Red        = {r=255, g=  0, b=  0, a=255}
@@ -169,35 +176,50 @@ struct
         | _           => NONE)
     | handle_event _ = NONE
 
-  fun next_event () =
+  fun next_event last =
       case Sdl.poll_event ()
       of SOME {t, ...} =>
         (case t 
-         of Sdl.Key_Down _ => SOME t
-          | _ => next_event ())
-       | _ => NONE
+         of Sdl.Key_Down _ =>
+          (case handle_event t
+           of SOME e => SOME e
+            | NONE => last)
+          | _ => next_event last)
+       | NONE => last
 
   val first_column = Landed (1, 0)
+
+  val tick_ms = 40
+  val drop_frames = 10
 
   fun main () =
     let
       val (r, st) = init ()
-      fun run md f st =
+      val empty_cmd = NONE
+      val start_ticks = Sdl.get_ticks ()
+      fun run last_tick last_drop last_cmd md f st =
         let
-          val cmd = case next_event ()
-                    of SOME ev => handle_event ev
-                     | _ => NONE
-          val (md', f', st') = tick md cmd f st
+          val this_ticks = Sdl.get_ticks ()
+          val do_tick = this_ticks - last_tick >= tick_ms
+          val next_cmd = next_event last_cmd
+          val ((md', f', st'), last_tick', last_cmd', last_drop') =
+            if do_tick then
+              let val do_drop = inc last_drop >= drop_frames
+              in
+                (tick md next_cmd f st do_drop, this_ticks, empty_cmd, if do_drop then 0 else inc last_drop)
+              end
+            else
+              ((md, f, st), last_tick, next_cmd, last_drop)
         in
           render r f' md';
-          Sdl.delay 400;
-          if cmd <> SOME Quit then
-            run md' f' st'
+          Sdl.delay (tick_ms div 4);
+          if next_cmd <> SOME Quit then
+            run last_tick' last_drop' last_cmd' md' f' st'
           else
             ()
         end
     in
-      st |> run first_column empty_field
+      run start_ticks 0 empty_cmd first_column empty_field st
     end
 end
 
